@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Chess visualization</title>
+    <style>
+        :root {
+            --square-size: 70px;
+            --square-size-sm: 50px;
+            --number-size: 10px;
+            --icon-size: 20px;
+        }
+
+        body {
+            font-family: monospace;
+        }
+
+        .row {
+            display: flex;
+            flex-flow: row;
+        }
+
+        .chessboard-dom {
+            display: flex;
+            flex-flow: column;
+        }
+
+        .chessboard-dom {
+            user-select: none;
+        }
+
+        .chessboard-dom.white-pov {
+            flex-flow: column-reverse;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .chessboard-square,
+        .chess-piece {
+            display: inline-block;
+            width: var(--square-size);
+            height: var(--square-size);
+            margin: 0;
+            position: relative;
+        }
+
+        .fill,
+        .chessboard-svg {
+            position: absolute;
+            display: block;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        .chessboard-square.sm,
+        .chess-piece.sm {
+            width: var(--square-size-sm);
+            height: var(--square-size-sm);
+        }
+
+        .chess-piece {
+            cursor: pointer;
+        }
+
+        .chessboard-number {
+            display: inline-block;
+            width: var(--number-size);
+            height: var(--square-size);
+        }
+
+        .chessboard-letter {
+            display: inline-block;
+            width: var(--square-size);
+            height: var(--number-size);
+        }
+
+        .chessboard-corner {
+            display: inline-block;
+            width: var(--number-size);
+            height: var(--number-size);
+        }
+
+        .chessboard-square {
+            background-color: #DDDDDD;
+        }
+
+        .chessboard-dom>.chessboard-row:nth-child(odd)>.chessboard-square:nth-child(even),
+        .chessboard-dom>.chessboard-row:nth-child(even)>.chessboard-square:nth-child(odd) {
+            background-color: #AAAAAA;
+        }
+
+        .chessboard-dom>.chessboard-row:nth-child(odd)>.chessboard-square:nth-child(odd),
+        .chessboard-dom>.chessboard-row:nth-child(even)>.chessboard-square:nth-child(even) {
+            /* background-color: #888888; */
+            background-color: #DDDDDD;
+        }
+
+        .chessboard-square {
+            outline: 1px solid black;
+        }
+
+        .chessboard-row {
+            margin: 0;
+            height: var(--square-size)
+        }
+
+        .error {
+            background-color: red !important;
+        }
+
+        .chessboard-square::after,
+        .chess-piece::after {
+            content: '';
+            position: absolute;
+            top: 10px;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background-size: contain;
+        }
+
+        .pawn::after {
+            background-image: url(./pawn.png);
+        }
+
+        .pawn.black::after {
+            background-image: url(./pawn-black.png);
+        }
+
+        .bishop::after {
+            background-image: url(./bishop.png);
+        }
+
+        .bishop.black::after {
+            background-image: url(./bishop-black.png);
+        }
+
+        .rook::after {
+            background-image: url(./rook.png);
+        }
+
+        .rook.black::after {
+            background-image: url(./rook-black.png);
+        }
+
+        .knight::after {
+            background-image: url(./knight.png);
+        }
+
+        .knight.black::after {
+            background-image: url(./knight-black.png);
+        }
+
+        .king::after {
+            background-image: url(./king.png);
+        }
+
+        .king.black::after {
+            background-image: url(./king-black.png);
+        }
+
+        .queen::after {
+            background-image: url(./queen.png);
+        }
+
+        .queen.black::after {
+            background-image: url(./queen-black.png);
+        }
+
+
+        .can-move-here::after {
+            cursor: pointer;
+            background-color: rgb(0, 0, 255, 0.5);
+        }
+
+        .selected::after {
+            background-color: rgb(255, 255, 255, 0.75);
+        }
+
+        #promotion-dialog {
+            z-index: 100;
+            height: 100px;
+            position: fixed;
+            display: inline-block;
+            top: 200px;
+            background: white;
+            left: 200px;
+            padding: 10px;
+        }
+
+        .icon {
+            display: inline-block;
+            height: var(--icon-size);
+            text-align: center;
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+
+        #chessboard {
+            position: relative;
+        }
+
+        .no-pointer-events {
+            pointer-events: none;
+        }
+
+        .large-button {
+            font-size: 16px;
+        }
+        
+        .finish-button {
+            font-size: 42px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Chess HUD concept</h1>
+    <div style="height:50px">
+        <p>See the position at a glance, and how it changes before you make a move. </p>
+        <p>The goal is to eliminate one move blunders caused by tunnel vision</p>
+    </div>
+    <!-- <div>See the position at a glance</div> -->
+    <div class="row">
+        <div id="chessboard">
+            <div class="chessboard-dom"></div>
+        </div>
+        <div style="max-width: 175px;">
+            <div id="captures-output"></div>
+            <div style="margin: 13px 0">
+                <button id="undo-button" class="large-button hidden">Choose another move</button>
+            </div>
+            <div style="margin: 13px 0">
+                <button id="finish-button" class="large-button finish-button hidden">Finish Move</button>
+            </div>
+            <div>
+                <label for="toggle-hud">HUD Enabled ?</label>
+                <input id="toggle-hud" type="checkbox"></input>
+            </div>
+            <div id="moves"></div>
+        </div>
+    </div>
+    <div>
+        Issues:
+        <ul>
+            <li>Can castle out of check</li>
+            <li>Hanging calculation doesn't take piece value into account</li>
+            <li>Hanging calculation doesn't take doubled pieces (i.e rook behind a rook on the same file) into account</li>
+            <li>The heatmap is inaccurate when moving a piece that is contributing to the heatmap (i.e a square can have supports + attacks of zero, but when we move our piece there it becomes red, because now that piece isnt supporting that square anymore)</li>
+        </ul>
+    </div>
+    <div id="promotion-dialog">
+        <div>
+            <div>
+                Pick a piece to promote to:
+            </div>
+            <div>
+                <span class="chess-piece knight" data-piece="knight"></span>
+                <span class="chess-piece bishop" data-piece="bishop"></span>
+                <span class="chess-piece rook" data-piece="rook"></span>
+                <span class="chess-piece queen" data-piece="queen"></span>
+            </div>
+        </div>
+    </div>
+    <script>
+        const chessBoard = [...Array(8)].map(x => [...Array(8)].map(y => ({
+            supports: { black: 0, white: 0 },   // The number of pieces that have line-of-sight on this square
+            attacks: { black: 0, white: 0 },    // The number of pieces that can actually capture here, taking pins etc. into consideration, used in balance calculations
+            domSquare: null,
+            piece: null
+        })));
+        const moveHistory = [];
+        let useHud = true;
+        let isPreviewingMove = false;
+
+        const undoButton = document.getElementById("undo-button");
+        undoButton.addEventListener("click", () => {
+            // this undo button can infinitly undo, but I have limited it to just the current move
+            if (!isPreviewingMove) return;
+            if (moveHistory.length === 0) return;
+            let move = moveHistory[moveHistory.length - 1];
+            moveHistory.splice(moveHistory.length - 1, 1);
+
+            // undo piece state
+            move.piece.pos = move.piecePreviousPos;
+            move.piece.firstTouched = move.piecePreviousTouched;
+            move.piece.type = move.piecePreviousType;
+
+            if (move.secondPiece) {
+                move.secondPiece.pos = move.secondPiecePreviousPos;
+                move.secondPiece.firstTouched = move.secondPieceTouched;
+            }
+
+            // undo capture
+            if (move.capturedPiece !== null) {
+                pieces.push(pop(captured, move.capturedPiece))
+            }
+
+            setPreviewMove(false);
+            updateChessboard();
+        })
+
+        const finishButton = document.getElementById("finish-button");
+        finishButton.addEventListener("click", () => {
+            setPreviewMove(false);
+            updateChessboard();
+        })
+
+        const hudToggle = document.getElementById("toggle-hud");
+        hudToggle.checked = useHud;
+        hudToggle.addEventListener("change", (e) => {
+            useHud = e.target.checked;
+            if (useHud) {
+                chessBoardDom.classList.remove("no-hud");
+            } else {
+                chessBoardDom.classList.add("no-hud");
+            }
+            updateChessboard();
+        })
+
+        function pop(array, value) {
+            const idx = array.indexOf(value);
+            if (idx === -1) return null;
+
+            array.splice(idx, 1);
+            return value;
+        }
+
+        let selected = null
+        const turnColor = () => (moveHistory.length + (isPreviewingMove ? 1 : 0)) % 2 === 0 ? "white" : "black";
+
+        const chessboardRoot = document.getElementById("chessboard");
+        const chessBoardDom = chessboardRoot.querySelector(".chessboard-dom")
+        const movesDom = document.getElementById("moves");
+        const capturesOutput = document.getElementById("captures-output");
+        chessBoardDom.innerHTML = (
+            chessBoard.map((y, i) => (
+                "<div class=\"chessboard-row\">" +
+                `<span class="chessboard-number">${i + 1}</span>` +
+                y.map((x, j) => `<span class="square-${i}-${j} chessboard-square ${i % 2 == 0 ? "black" : ""}"></span>`).join("") +
+                "</div>"
+            )).join("") +
+            `<div>
+                <span class="chessboard-corner"></span>
+                ${"ABCDEFGH".split("").map(c => `<span class="chessboard-letter">${c}</span>`).join("")}
+            </div>` +
+            `<svg class="chessboard-svg no-pointer-events"></svg>`
+        );
+        const chessBoardSvg = chessboardRoot.querySelector(".chessboard-svg")
+        chessBoardSvg.setAttribute("width", chessBoardDom.getBoundingClientRect().width);
+        chessBoardSvg.setAttribute("height", chessBoardDom.getBoundingClientRect().height);
+
+        for (const y in chessBoard) {
+            for (const x in chessBoard[y]) {
+                chessBoard[y][x].domSquare = chessBoardDom.querySelector(`.square-${y}-${x}`);
+                chessBoard[y][x].domSquare.addEventListener("click", () => {
+                    onChessboardSquareClick(parseInt(y), parseInt(x));
+                });
+            }
+        }
+
+        function onChessboardSquareClick(row, col) {
+            console.log(chessBoard[row][col]);
+
+            if (!isPreviewingMove && chessBoard[row][col].selectedCanMoveHere) {
+                movePiece(selected, row, col);
+            } else if (!isPreviewingMove && chessBoard[row][col].piece !== null && turnColor() === chessBoard[row][col].piece.color) {
+                if (chessBoard[row][col].piece === selected) {
+                    selected = null;
+                } else {
+                    selected = chessBoard[row][col].piece;
+                }
+            } else {
+                return;
+            }
+
+            updateChessboard();
+        }
+
+        const promotionDialog = document.getElementById("promotion-dialog");
+        promotionDialog.querySelectorAll(".chess-piece").forEach((el) => {
+            el.addEventListener("click", () => {
+                selected.type = el.getAttribute("data-piece");
+                promotionDialog.classList.add("hidden");
+
+                setPreviewMove();
+
+                updateChessboard();
+            });
+        })
+
+        promotionDialog.classList.add("hidden");
+        function movePiece(piece, newRow, newCol, castling) {
+            const newPos = getPosFromRowCol(newRow, newCol);
+            const pieceLetter = piece.type === "knight" ? "n" : piece.type[0].toLowerCase();
+            const move = {
+                piece: piece,
+                piecePreviousPos: piece.pos,
+                piecePreviousType: piece.type,
+                piecePreviousTouched: piece.firstTouched,
+                newRow: newRow,
+                newCol: newCol,
+                newPos: newPos,
+                capturedPiece: chessBoard[newRow][newCol].piece,
+                specialName: false,
+                secondPiece: null,
+                secondPiecePreviousPos: null,
+                secondPieceTouched: null,
+            };
+
+            const [previousRow, previousCol] = getRowCol(move.piecePreviousPos);
+
+            piece.pos = newPos;
+
+            // capture a piece if we can
+            const capturedPiece = move.capturedPiece;
+            if (capturedPiece !== null) {
+                if (capturedPiece.color === piece.color) {
+                    throw new Error("Program is allowing friendly captures, there is a bug somewhere before this point");
+                }
+
+                pieces.splice(pieces.indexOf(capturedPiece), 1);
+                captured.push(capturedPiece);
+            }
+
+            if (piece.type === "pawn" ) {
+                if (newRow === 0 || newRow === chessBoard.length) {
+                    // promote this pawn. requires user input. turn ends after promotion
+                    promotionDialog.classList.remove("hidden");
+                    return;
+                }
+
+                if (previousCol !== newCol && capturedPiece === null) {
+                    // only way this move would have been allowed is if it was en-pessant.
+                    // let us capture the pawn one square behind us
+                    move.specialName = "en-pessant";
+
+                    move.capturedPiece = chessBoard[previousRow][newCol].piece;
+                    if (move.capturedPiece === null) {
+                        throw new Error("En pessant not working ?");
+                    }
+                    if (move.capturedPiece.type !== "pawn") {
+                        throw new Error("En pessant allowing anything nowadays?");
+                    }
+
+                    pieces.splice(pieces.indexOf(move.capturedPiece), 1);
+                    captured.push(move.capturedPiece);
+                }
+
+                // need to track this for en-pissant to work
+                if (!piece.firstTouched && Math.abs(previousRow - newRow) > 1) {
+                    piece.pawnMovedTwoSquares = true;
+                }
+            } else if (piece.type === "king") {
+                if(Math.abs(newCol - previousCol) === 2) {
+                    // we are castling.
+                    const side = newCol > previousCol ? 1 : -1;
+
+                    move.specialName = "castling " + (side > 0 ? "kingside" : "queenside");
+                    
+                    let rookCol = newCol;
+                    let rook = null;
+                    while(rookCol >= 0 && rookCol < chessBoard[0].length) {
+                        const rookColPiece = chessBoard[newRow][rookCol].piece;
+                        if (rookColPiece !== null && rookColPiece.type === "rook") {
+                            rook = rookColPiece;
+                            break;
+                        }
+                        rookCol += side;
+                    }
+
+                    if (!rook) {
+                        throw new Error("This rook should always be found.");
+                    }
+
+                    move.secondPiece = rook;
+                    move.secondPiecePreviousPos = rook.pos;
+                    move.secondPieceTouched = rook.firstTouched;
+
+                    rook.pos = getPosFromRowCol(newRow, previousCol + side);
+                    if (rook.firstTouched) {
+                        throw new Error("move enumerator is allowing castling with rooks that have already been touched");
+                    }
+                    rook.firstTouched = moveHistory.length;
+                }
+            }
+
+            moveHistory.push(move);
+            if (!piece.firstTouched) {
+                piece.firstTouched = moveHistory.length;
+            }
+
+            setPreviewMove(true);
+        }
+
+        // turn can end after we make a move, or after we promote a piece
+        function setPreviewMove(state) {
+            selected = null;
+            isPreviewingMove = state;
+            if (state) {
+                finishButton.classList.remove("hidden");
+                undoButton.classList.remove("hidden");
+            } else {
+                finishButton.classList.add("hidden");
+                undoButton.classList.add("hidden");
+            }
+        }
+
+        const acceptedTypes = [
+            "king", "queen", "knight", "bishop", "rook", "pawn"
+        ]
+        let pieces = []
+        const captured = []
+
+        function updateSupportCounts() {
+            // clear chessboard
+            for (const row in chessBoard) {
+                for (const col in chessBoard[row]) {
+                    chessBoard[row][col].supports.black = 0;
+                    chessBoard[row][col].supports.white = 0;
+                    const piece = chessBoard[row][col].piece;
+                }
+            }
+
+            for (const piece of pieces) {
+                enumerateSupportSquares(piece, (row, col, capturedPiece) => {
+                    chessBoard[row][col].supports[piece.color] += 1;
+                });
+            }
+        }
+
+        function chessNotation(move) {
+            return move.piece.color[0].toUpperCase() + ": " + 
+                (move.piece.type === "knight" ? "n" : move.piece.type[0].toLowerCase()) +
+                move.piecePreviousPos + 
+                (move.capturedPiece === null ? " -> " : " x ") + 
+                move.newPos + 
+                (move.specialName ? " (" + move.specialName + ")" : "");
+
+        }
+
+        function updateChessboard() {
+            // clear chessboard buffers, svg
+            for (const row in chessBoard) {
+                for (const col in chessBoard[row]) {
+                    const chessBoardDomSquare = chessBoard[row][col].domSquare;
+                    chessBoardDomSquare.className = `chessboard-square`;
+                    chessBoardDomSquare.innerHTML = '';
+                    chessBoard[row][col].selectedCanMoveHere = false;
+                    chessBoard[row][col].piece = null;
+                }
+            }
+            capturesOutput.innerHTML = "";
+            chessBoardSvg.innerHTML = "";
+            movesDom.innerHTML = 
+            `<h3>Moves</h3>` + (
+                moveHistory.length === 0 ? "<div>None yet</div>" : moveHistory.map((h, i) => (
+                    // TODO: White, black move on the same row. 
+                    `<div>${i % 2 === 0 ? "W" : "B"}: ${chessNotation(h)}</div>`
+                )).join("")
+            );
+
+            // reset POV
+            if (turnColor() === "white") {
+                chessBoardDom.classList.add("white-pov");
+            } else {
+                chessBoardDom.classList.remove("white-pov");
+            }
+
+            // place all pieces
+            for (const piece of pieces) {
+                if (!acceptedTypes.includes(piece.type)) {
+                    throw new Error(`Wrong piece type: ${piece.type}`);
+                }
+
+                const [row, col] = getRowCol(piece.pos);
+                if (chessBoard[row][col].piece !== null) {
+                    console.error(`Two pieces overlapping: ${chessBoard[row][col].piece.type} ${chessBoard[row][col].piece.col} and ${piece.type} ${piece.col}`);
+                    chessBoard[row][col].domSquare.classList.add("error");
+                }
+
+                chessBoard[row][col].domSquare.classList.add("chess-piece", piece.type);
+                if (piece.color === "black") {
+                    chessBoard[row][col].domSquare.classList.add("black");
+                }
+
+                chessBoard[row][col].piece = piece;
+            }
+
+            // display captured pieces, our pieces then their pieces
+            const listCaptures = (pieces) => pieces.length === 0 ? `<span class="chess-piece sm">None</span>` :
+                pieces.map(p => `<span class="chess-piece ${p.type} sm ${p.color}"></span>`).join("");
+            capturesOutput.innerHTML = `
+                ${isPreviewingMove ? 
+                    `<h3>Click "Finish Move" to lock in your move and go to the next person, or "Choose another move" to pick a different move</h3>` : 
+                    `<h3>It is ${turnColor()}'s turn to move. Click a piece, then click a blue square to make a move.</h3>`
+                }
+                <h4 style="margin-bottom: 5px;">Captures</h4>
+                <div class="row">
+                ${captured.length === 0 ? "<h5>None yet</h5>" : (
+                    `
+                    <div>
+                        <b>Ours</b>
+                        <div>
+                            ${listCaptures(captured.filter(p => p.color === turnColor()))}
+                        </div>
+                    </div>
+                    <div>
+                        <b>Theirs</b>
+                        <div>
+                            ${listCaptures(captured.filter(p => p.color !== turnColor()))}
+                        </div>
+                    </div>
+                    `
+                )}
+                </div>
+            `
+
+            // highlight where the selected piece can be moved
+            if (selected !== null) {
+                const [selRow, selCol] = getRowCol(selected.pos);
+                chessBoard[selRow][selCol].domSquare.classList.add("selected");
+                enumerateMoveSquares(selected, (row, col) => {
+                    chessBoard[row][col].domSquare.classList.add("can-move-here")
+                    chessBoard[row][col].selectedCanMoveHere = true;
+                });
+            }
+
+            
+            if (!useHud) {
+                return;
+            }
+
+            // intialize data to be used in HUD visualization
+            for (const piece of pieces) {
+                if (!piece.supports) {
+                    piece.supports = [];
+                    piece.recievedAttacks = [];
+                }
+                
+                piece.enPessant = null;
+                piece.supports.splice(0, piece.supports.length);
+                piece.recievedAttacks.splice(0, piece.recievedAttacks.length);
+            }
+            for(const row in chessBoard) {
+                for(const col in chessBoard[row]) {
+                    for(const color in chessBoard[row][col].attacks) {
+                        chessBoard[row][col].attacks[color] = 0;
+                    }
+                }
+            }
+
+            // Find out which pieces are attacking which other pieces.
+            // This can only be done with enumerateMoveSquares
+            for(const piece of pieces) {
+                enumerateMoveSquares(piece, (row, col, capturedPiece, options = {}) => {
+                    chessBoard[row][col].attacks[piece.color] += 1;
+
+                    if (!capturedPiece) return;
+                    if (options.enPessant) {
+                        capturedPiece.enPessant = piece;
+                        return;
+                    } 
+
+                    piece.supports.push(capturedPiece);
+                    capturedPiece.recievedAttacks.push(piece);
+                })
+            }
+
+            // Find out which pieces are supporting which other pieces. 
+            // This can only be accurately done with enumerateSupportSquares.
+            for(const piece of pieces) {
+                enumerateSupportSquares(piece, (row, col, supportPiece) => {
+                    if (!supportPiece || piece.color !== supportPiece.color) return;
+
+                    piece.supports.push(supportPiece);
+                    supportPiece.recievedAttacks.push(piece);
+                })
+            }
+
+            // Find out which pieces are supporting which other pieces.
+            // this can only be done with enumerateSupportSquares
+
+            
+            // important that this is called after enumerateMoveSquares, required for
+            // correct visualization of the position
+            updateSupportCounts();
+
+            // Render the HUD
+            let svgInnerHtml = '';
+
+            for (const row in chessBoard) {
+                for (const col in chessBoard[row]) {
+                    let iconsHtml = '';
+                    let innerHtml = '';
+
+                    const chessBoardDomSquare = chessBoard[row][col].domSquare;
+                    const supports = chessBoard[row][col].supports[turnColor()];
+                    const attacks = getForeignAttacks(row, col, turnColor());
+                    const squareBalance = (supports - attacks);
+                    const piece = chessBoard[row][col].piece;
+
+                    if (squareBalance !== 0) {
+                        const squareColor = squareBalance > 0 ? `rgb(0, 255, 0, ${squareBalance / 10})` :
+                            `rgb(255, 0, 0, ${-squareBalance / 10})`;
+
+                        innerHtml += `<div class="fill" style="background-color: ${squareColor}"></div>`;
+                    }
+
+                    // innerHtml += `<span style="position:absolute;top:0;left:0">${getPosFromRowCol(parseInt(row), parseInt(col))}</span>`;
+
+                    if (piece !== null) {
+                        const pieceBalance = piece.recievedAttacks.filter(x => x.color === piece.color).length - 
+                            piece.recievedAttacks.filter(x => x.color !== piece.color).length;
+
+                        let minAttackerValue = 99999999;
+                        for (const attackerOrSupporter of piece.recievedAttacks) {
+                            if (attackerOrSupporter.color === piece.color) continue;
+
+                            const attacker = attackerOrSupporter;
+                            const val = pieceValue(attacker)
+                            if (val < minAttackerValue) minAttackerValue = val;
+                        }
+                        const underAttackByLowerValuePiece = (pieceValue(piece) > minAttackerValue);
+
+                        svgInnerHtml += drawArrowsForPiece(piece, row, col, {
+                            underAttackByLowerValuePiece: underAttackByLowerValuePiece
+                        });
+
+                        if (pieceBalance < 0 || underAttackByLowerValuePiece) {
+                            if (piece.color === turnColor()) {
+                                const message = 
+                                    piece.type === "king" ? "Your king is in check. Other issues will have to wait till you have resolved this" :
+                                    pieceBalance < 0 ? "This piece may be hanging, since there are fewer supports than attackers (although if you have doubled up your supports behind one another this warning will be wrong)" : 
+                                    underAttackByLowerValuePiece ? "This piece may be hanging despite having adequate supports, since it is under attack by a lower value piece" :
+                                    "NGL, This icon shouldn't be here";
+                                    
+                                iconsHtml += `<div class="icon" title="${message}"  style="background-color:red; color: white">!</div>`;
+                            } else {
+                                const message = isPreviewingMove ? "This piece will be under attack on the next turn" :
+                                    "Looks like a free piece, but it may also be a trap";
+
+                                iconsHtml += `<div class="icon" title="${message}" style="background-color:gray; color: white">L</div>`;
+                            }
+                        }
+
+                        if (piece.color === turnColor() && (piece.enPessant)) {
+                            const message = "This pawn can be captured by their pawn via an esoteric en-pessant rule where a pawn can capture a 2-square forward moving pawn on the very next move as if it had only moved forwards 1 square.";
+                            iconsHtml += `<div class="icon" title="${message}"  style="background-color:blue; color: white">!</div>`
+                        }
+                    }
+
+                    chessBoardDomSquare.innerHTML = `
+                        ${innerHtml}
+                        <div class="fill">${iconsHtml}</div>
+                    `;
+                }
+            }
+
+            chessBoardSvg.innerHTML = svgInnerHtml;
+        }
+
+        function addAmountInAngle(x, y, amount, angle) {
+            return [x + amount * Math.cos(angle), y + amount * Math.sin(angle)];
+        }
+
+        function drawArrowsForPiece(piece, row, col, {
+            underAttackByLowerValuePiece = false
+        }) {
+            if (!row) {
+                [row, col] = getRowCol(piece.pos);
+            }
+
+            let svgInnerHtml = "";
+            const getPos = (domElement) => {
+                let rect = domElement.getBoundingClientRect();
+                rect = domElement.getBoundingClientRect();
+                const relativeToRect = chessBoardSvg.getBoundingClientRect();
+
+                return [rect.left - relativeToRect.left + rect.width / 2, rect.top - relativeToRect.top + rect.height / 2];
+            }
+            const drawChessboardArrow = ([row1, col1], [row2, col2], { color = "#000", width = 2, arrowAngle = 35 }) => {
+                let [x1, y1] = getPos(chessBoard[row1][col1].domSquare);
+                let [x2, y2] = getPos(chessBoard[row2][col2].domSquare);
+
+                const randNoise = 35;
+                let lineAngle = Math.atan2(y2 - y1, x2 - x1);
+
+                const radius = 10;
+                const perpAmount = 10;
+                [x1, y1] = addAmountInAngle(x1, y1, radius, lineAngle);
+                [x2, y2] = addAmountInAngle(x2, y2, -radius, lineAngle);
+                [x1, y1] = addAmountInAngle(x1, y1, perpAmount, lineAngle - Math.PI / 2);
+                [x2, y2] = addAmountInAngle(x2, y2, perpAmount, lineAngle - Math.PI / 2);
+                lineAngle = Math.atan2(y2 - y1, x2 - x1);
+
+                // The arrow needs to start thicker and finish thinner.
+                // This is so that it is more obvious what is happening when several arrows have been lined up
+
+                svgInnerHtml += (
+                    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" style="stroke:${color};stroke-width:${width}" />`
+                );
+
+                // draw arrowhead
+                const arrowHeadSize = 20;
+                for (const arrowHeadAngle of [
+                    Math.PI + lineAngle + arrowAngle * Math.PI / 180,
+                    Math.PI + lineAngle - arrowAngle * Math.PI / 180
+                ]) {
+                    // let mx = x2 / 2 + x1 / 2;
+                    // let my = y2 / 2 + y1 / 2
+                    let mx = x2;
+                    let my = y2;
+                    const arrowHeadX = mx + arrowHeadSize * Math.cos(arrowHeadAngle);
+                    const arrowHeadY = my + arrowHeadSize * Math.sin(arrowHeadAngle);
+
+                    svgInnerHtml += (
+                        `<line x1="${mx}" y1="${my}" x2="${arrowHeadX}" y2="${arrowHeadY}" style="stroke:${color};stroke-width:${width}" />`
+                    );
+                }
+            }
+
+            const isPieceUnderAttack = !!piece.recievedAttacks.find(p => p.color !== piece.color);
+
+            const king = getKing(turnColor());
+            let kingIsInCheck = isKingInCheck(king);
+            for (const attackerOrSupporter of piece.recievedAttacks) {
+                const isOurPiece = attackerOrSupporter.color === turnColor();
+                const isSupportPiece = attackerOrSupporter.color === piece.color;
+                let isImportantArrow = isPieceUnderAttack;
+                let isRedundantArrow = isSupportPiece && underAttackByLowerValuePiece;
+
+                if (piece.type === "king" && attackerOrSupporter.color === piece.color) {
+                    // It doesn't make sense to draw supporting arrows for a king, since we
+                    // can't support a king really
+                    continue;
+                }
+
+                if (kingIsInCheck) {
+                    if (!(piece.type === "king" && piece.color === turnColor())) {
+                        isImportantArrow = false;
+                    }
+                }
+
+                // I am making only some arrows opaque, because
+                // there are a LOT of arrows on the screen and the noise is quite high.
+
+                // if we are supporting a high value piece like a queen but it is
+                // under attack by a pawn or smth then our supports dont really matter, so they
+                // should be de-emphasized somehow
+
+                // if a piece isn't under attack, we also probably don't care as much that it is being
+                // supported. 
+
+                let rgbComponent = isOurPiece ? "0, 175, 0" : "175, 0, 0";
+                let alpha = 0.25;
+                if (isImportantArrow) {
+                    alpha = 1;
+
+                    if (!isRedundantArrow) {
+                        rgbComponent = isOurPiece ? "50, 255, 50" : "255, 50, 50";
+                    }
+                }
+
+                const arrowColor = `rgb(${rgbComponent}, ${alpha})`;
+
+                const rowCol = getRowCol(attackerOrSupporter.pos);
+                drawChessboardArrow(rowCol, [row, col], {
+                    color: arrowColor,
+                    width: "3px",
+                    arrowAngle: isSupportPiece ? 55 : 25
+                });
+            }
+
+            if (piece.enPessant) {
+                drawChessboardArrow(getRowCol(piece.enPessant.pos), [row, col], {
+                    color: "rgb(0, 0, 255, 1)",
+                    width: "3px",
+                    arrowAngle: 45
+                });
+            }
+
+            return svgInnerHtml;
+        }
+
+        // only set countSupports = true if you have enumerated attacks properly
+        function getForeignAttacks(row, col, pieceColor, countSupports = true) {
+            let foreignAttacks = 0;
+            for (const attackColor in chessBoard[row][col].supports) {
+                if (attackColor === pieceColor) continue;
+
+                if (countSupports) {
+                    foreignAttacks += chessBoard[row][col].supports[attackColor];
+                } else {
+                    foreignAttacks += chessBoard[row][col].attacks[attackColor];
+                }
+            }
+            return foreignAttacks;
+        }
+
+        function pieceValue(piece) {
+            switch (piece.type) {
+                case "pawn": return 1;
+                case "knight": return 3;
+                case "bishop": return 3;
+                case "rook": return 5;
+                case "queen": return 8;
+                case "king": return 99999999;
+            }
+
+            return 0;
+        }
+
+        function getKing(kingColor) {
+            for (const boardPiece of pieces) {
+                if (boardPiece.type === "king" && boardPiece.color === kingColor) 
+                    return boardPiece;
+            }
+            return null;
+        }
+
+        /**
+         *  NOTE: call updateSupportCounts() before running this
+         * */
+        function isKingInCheck(king) {
+            let [kingRow, kingCol] = getRowCol(king.pos);
+            return getForeignAttacks(kingRow, kingCol, king.color) > 0;
+        }
+
+        /**
+         * NOTE: run updateSupportCounts() after this to get correct support counts
+         * */
+        function enumerateMoveSquares(piece, func) {
+            const [posRow, posCol] = getRowCol(piece.pos);
+
+            const trySquare = (row, col, capturePiece, options) => {
+                // don't enumerate moves to squares with our own pieces
+                if (chessBoard[row][col].piece?.color === piece.color) {
+                    return;
+                }
+
+                // don't enumerate moves that will put our king in check.
+                // try this move, see if the king is now in check, and then undo the move.
+                // if the king was in check, don't enumerate this move.
+
+                // swap this piece with the one at row, col
+                let previousPiece = chessBoard[row][col].piece;
+                chessBoard[row][col].piece = piece;
+                chessBoard[posRow][posCol].piece = null;
+
+                let previousPos = piece.pos;
+                piece.pos = getPosFromRowCol(row, col);
+
+                updateSupportCounts();
+                let kingWasInCheck = isKingInCheck(getKing(piece.color));
+
+                // swap pieces back
+                chessBoard[posRow][posCol].piece = piece;
+                chessBoard[row][col].piece = previousPiece;
+                piece.pos = previousPos;
+
+                if (kingWasInCheck) {
+                    return;
+                }
+
+                func(row, col, capturePiece, options);
+            }
+
+            if (piece.type === "pawn") {
+                const nextDir = piece.color === "white" ? 1 : - 1;
+                const nextRow = posRow + nextDir;
+                if (chessBoard[nextRow][posCol].piece === null) {
+                    trySquare(nextRow, posCol);
+
+                    if (!piece.firstTouched) {
+                        const nextNextRow = posRow + 2 * nextDir;
+                        if (chessBoard[nextNextRow][posCol].piece === null) {
+                            trySquare(nextNextRow, posCol);
+                        }
+                    }
+                }
+
+                enumerateSupportSquares(piece, (row, col) => {
+                    let existingPiece = chessBoard[row][col].piece;
+                    let enPessant = false;
+                    if (existingPiece !== null && existingPiece.color === piece.color) {
+                        return;
+                    }
+
+                    if (existingPiece === null) {
+                        // check if we can en-peasant
+                        const possiblePawn = chessBoard[posRow][col].piece;
+                        if (!possiblePawn) {
+                            return;
+                        }
+
+                        const canEnPeasant = 
+                            possiblePawn.type === "pawn" &&
+                            possiblePawn.color !== piece.color &&
+                            possiblePawn.firstTouched === moveHistory.length && 
+                            possiblePawn.pawnMovedTwoSquares;
+                        
+                        if (!canEnPeasant) {
+                            return;
+                        }
+
+                        existingPiece = possiblePawn;
+                        enPessant = true;
+                    }
+
+                    trySquare(row, col, existingPiece, { enPessant: enPessant });
+                });
+                return;
+            } else if (piece.type === "king") {
+                // can't move to a piece that is under attack by opposing forces
+                function enumeratePosForKing(row, col) {
+                    if (row < 0 || row >= chessBoard.length) return;
+                    if (col < 0 || col >= chessBoard[0].length) return;
+
+                    trySquare(row, col, chessBoard[row][col].piece);
+                }
+
+                enumeratePosForKing(posRow - 1, posCol - 1);
+                enumeratePosForKing(posRow, posCol - 1);
+                enumeratePosForKing(posRow + 1, posCol - 1);
+                enumeratePosForKing(posRow - 1, posCol);
+                enumeratePosForKing(posRow + 1, posCol);
+                enumeratePosForKing(posRow - 1, posCol + 1);
+                enumeratePosForKing(posRow, posCol + 1);
+                enumeratePosForKing(posRow + 1, posCol + 1);
+
+                // castling
+                if (piece.firstTouched) {
+                    return;
+                }
+
+                function enumerateCastling(side) {
+                    // try to find a rook we can castle with
+                    let col = posCol + side;
+                    let foundRook = false;
+                    while(col >= 0 && col < chessBoard[0].length) {
+                        const foundPiece = chessBoard[posRow][col].piece;
+                        if (foundPiece !== null){
+                            if (foundPiece.type === "rook" && foundPiece.color === piece.color && !foundPiece.firstTouched) {
+                                // found a pristine rook, success
+                                foundRook = true;
+                                break;
+                            }
+                            
+                            // should not be pieces between the king and the rook
+                            break;
+                        }
+
+                        let foreignAttacks = getForeignAttacks(posRow, col, piece.color);
+                        if (foreignAttacks > 0) {
+                            // squares between the king and the rook can't be under attack
+                            break;
+                        }
+
+                        col += side;
+                    }
+
+                    if (foundRook) {
+                        // trySquare(posRow, posCol + 2 * side);
+                        func(posRow, posCol + 2 * side);
+                    }
+                }
+
+                // updateSupportCounts(); // already called above
+                enumerateCastling(-1);
+                enumerateCastling(1);
+
+                return;
+            }
+
+            enumerateSupportSquares(piece, (row, col, capturePiece) => {
+                if (
+                    chessBoard[row][col].piece !== null &&
+                    chessBoard[row][col].piece.color === piece.color
+                ) {
+                    // we can't move to our own squares
+                    return;
+                }
+
+                trySquare(row, col, capturePiece);
+            })
+        }
+
+        function enumerateSupportSquares(
+            piece, // = {type: "pawn", pos: "A1", color: "black"}, 
+            func,
+        ) {
+            const [posRow, posCol] = getRowCol(piece.pos);
+            if (chessBoard[posRow][posCol].piece !== piece) {
+                // sometimes a piece has been taken off the board to do some type of calculation
+                return;
+            }
+
+            function enumerateSquaresInDirection(startRow, startCol, rowDir, colDir) {
+                while (
+                    (startRow >= 0 && startRow < chessBoard.length) &&
+                    (startCol >= 0 && startCol < chessBoard[0].length)
+                ) {
+                    func(startRow, startCol, chessBoard[startRow][startCol].piece);
+
+                    // The raycast should go through the opponent's king(s), because
+                    // a) the king shouldn't ever be hanging and
+                    // b) if it is, it shouldn;t be able to travel along the same file/diagonal in which
+                    //      it is being attacked
+                    if (chessBoard[startRow][startCol].piece !== null && 
+                        !(chessBoard[startRow][startCol].piece.type === "king" && 
+                        chessBoard[startRow][startCol].piece.color !== piece.color)) {
+                        break;
+                    }
+                    startRow += rowDir;
+                    startCol += colDir;
+                }
+            }
+
+            function enumeratePos(row, col) {
+                if (row < 0 || row >= chessBoard.length) return;
+                if (col < 0 || col >= chessBoard[0].length) return;
+
+                func(row, col, chessBoard[row][col].piece);
+            }
+
+            switch (piece.type) {
+                case "pawn":
+                    const dir = piece.color === "white" ? 1 : -1;
+                    const nextRow = posRow + dir;
+                    if (nextRow >= 0 && nextRow < chessBoard.length) {
+                        if (posCol + 1 < chessBoard[nextRow].length) {
+                            func(nextRow, posCol + 1, chessBoard[nextRow][posCol + 1].piece);
+                        }
+                        if (posCol - 1 >= 0) {
+                            func(nextRow, posCol - 1, chessBoard[nextRow][posCol - 1].piece);
+                        }
+                    }
+                    break;
+                case "rook":
+                    enumerateSquaresInDirection(posRow - 1, posCol, -1, 0);
+                    enumerateSquaresInDirection(posRow + 1, posCol, 1, 0);
+                    enumerateSquaresInDirection(posRow, posCol - 1, 0, -1);
+                    enumerateSquaresInDirection(posRow, posCol + 1, 0, 1);
+                    break;
+                case "bishop":
+                    enumerateSquaresInDirection(posRow - 1, posCol - 1, -1, -1);
+                    enumerateSquaresInDirection(posRow - 1, posCol + 1, -1, + 1);
+                    enumerateSquaresInDirection(posRow + 1, posCol + 1, + 1, + 1);
+                    enumerateSquaresInDirection(posRow + 1, posCol - 1, + 1, - 1);
+                    break;
+                case "queen":
+                    enumerateSquaresInDirection(posRow - 1, posCol - 1, -1, -1);
+                    enumerateSquaresInDirection(posRow - 1, posCol + 1, -1, + 1);
+                    enumerateSquaresInDirection(posRow + 1, posCol + 1, + 1, + 1);
+                    enumerateSquaresInDirection(posRow + 1, posCol - 1, + 1, - 1);
+                    enumerateSquaresInDirection(posRow - 1, posCol, -1, 0);
+                    enumerateSquaresInDirection(posRow + 1, posCol, 1, 0);
+                    enumerateSquaresInDirection(posRow, posCol - 1, 0, -1);
+                    enumerateSquaresInDirection(posRow, posCol + 1, 0, 1);
+                    break;
+                case "knight":
+                    enumeratePos(posRow + 2, posCol + 1);
+                    enumeratePos(posRow + 1, posCol + 2);
+
+                    enumeratePos(posRow + 2, posCol - 1);
+                    enumeratePos(posRow + 1, posCol - 2);
+
+                    enumeratePos(posRow - 2, posCol - 1);
+                    enumeratePos(posRow - 1, posCol - 2);
+
+                    enumeratePos(posRow - 2, posCol + 1);
+                    enumeratePos(posRow - 1, posCol + 2);
+                    break
+                case "king":
+                    enumeratePos(posRow - 1, posCol - 1);
+                    enumeratePos(posRow, posCol - 1);
+                    enumeratePos(posRow + 1, posCol - 1);
+                    enumeratePos(posRow - 1, posCol);
+                    enumeratePos(posRow + 1, posCol);
+                    enumeratePos(posRow - 1, posCol + 1);
+                    enumeratePos(posRow, posCol + 1);
+                    enumeratePos(posRow + 1, posCol + 1);
+                    break
+            }
+        }
+
+        // returns 0,0 from a chess position like A1
+        function getRowCol(pos) { return [pos[1] - '1', pos.charCodeAt(0) - 'A'.charCodeAt(0)]; }
+        function getPosFromRowCol(row, col) { return 'ABCDEFGH'[col] + (row + 1).toString(); }
+
+        function restart() {
+            pieces = [
+                // { type: "king", color: "white", pos: "D1" },
+                // { type: "king", color: "black", pos: "B8" },
+                { type: "pawn", color: "white", pos: "A2" },
+                { type: "pawn", color: "white", pos: "B2" },
+                { type: "pawn", color: "white", pos: "C2" },
+                { type: "pawn", color: "white", pos: "D2" },
+                { type: "pawn", color: "white", pos: "E2" },
+                { type: "pawn", color: "white", pos: "F2" },
+                { type: "pawn", color: "white", pos: "G2" },
+                { type: "pawn", color: "white", pos: "H2" },
+                { type: "king", color: "white", pos: "E1" },
+                { type: "queen", color: "white", pos: "D1" },
+                { type: "bishop", color: "white", pos: "C1" },
+                { type: "bishop", color: "white", pos: "F1" },
+                { type: "knight", color: "white", pos: "B1" },
+                { type: "knight", color: "white", pos: "G1" },
+                { type: "rook", color: "white", pos: "A1" },
+                { type: "rook", color: "white", pos: "H1" },
+    
+                { type: "pawn", color: "black", pos: "A7" },
+                { type: "pawn", color: "black", pos: "B7" },
+                { type: "pawn", color: "black", pos: "C7" },
+                { type: "pawn", color: "black", pos: "D7" },
+                { type: "pawn", color: "black", pos: "E7" },
+                { type: "pawn", color: "black", pos: "F7" },
+                { type: "pawn", color: "black", pos: "G7" },
+                { type: "pawn", color: "black", pos: "H7" },
+                { type: "king", color: "black", pos: "E8" },
+                { type: "queen", color: "black", pos: "D8" },
+                { type: "bishop", color: "black", pos: "C8" },
+                { type: "bishop", color: "black", pos: "F8" },
+                { type: "knight", color: "black", pos: "B8" },
+                { type: "knight", color: "black", pos: "G8" },
+                { type: "rook", color: "black", pos: "A8" },
+                { type: "rook", color: "black", pos: "H8" },
+
+                // { type: "queen", color: "black", pos: "A7" },
+                // { type: "queen", color: "black", pos: "B7" },
+                // { type: "queen", color: "black", pos: "C7" },
+                // { type: "queen", color: "black", pos: "D7" },
+                // { type: "queen", color: "black", pos: "E7" },
+                // { type: "queen", color: "black", pos: "F7" },
+                // { type: "queen", color: "black", pos: "G7" },
+                // { type: "queen", color: "black", pos: "H7" },
+                // { type: "king", color: "black", pos: "E8" },
+                // { type: "queen", color: "black", pos: "D8" },
+                // { type: "queen", color: "black", pos: "C8" },
+                // { type: "queen", color: "black", pos: "F8" },
+                // { type: "queen", color: "black", pos: "B8" },
+                // { type: "queen", color: "black", pos: "G8" },
+                // { type: "queen", color: "black", pos: "A8" },
+                // { type: "queen", color: "black", pos: "H8" },
+            ]
+            updateChessboard();
+        }
+
+        restart();
+    </script>
+</body>
+
+</html>
