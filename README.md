@@ -1,4 +1,4 @@
-# Chess HUD (Try it [here](https://el-tejaso.github.io/Chess-HUD/chess.html))
+# Chess HUD (Try it [here](https://tejas-h5.github.io/Chess-HUD/chess.html))
 
 An idea for a chess setup where you can see exactly what is happening at the current moment at all times.
 Mainly to reduce one move blunders and to see the consequences of one of your moves before you finish your turn.
